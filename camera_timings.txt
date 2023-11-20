@@ -1,0 +1,26 @@
+[1:38:11.174742487] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 1296x972-SGBRG10_1X10 - Selected unicam format: 1296x972-pGAA
+(1296, 972) 43.25  still    (1024, 768)  XBGR8888  0.0928
+[1:38:21.131267326] [1872]  INFO Camera camera.cpp:1181 configuring streams: (0) 1024x768-XBGR8888 (1) 1296x972-SGBRG10_CSI2P
+[1:38:21.133653301] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 1296x972-SGBRG10_1X10 - Selected unicam format: 1296x972-pGAA
+(1296, 972) 43.25  video    (1024, 768)  XBGR8888  0.0831
+[1:38:30.329046238] [1875]  INFO Camera camera.cpp:1181 configuring streams: (0) 1024x768-XBGR8888 (1) 1296x972-SGBRG10_CSI2P
+[1:38:30.331541212] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 1296x972-SGBRG10_1X10 - Selected unicam format: 1296x972-pGAA
+(1296, 972) 43.25  preview  (1024, 768)  XBGR8888  0.0585
+[1:38:36.994492916] [1878]  INFO Camera camera.cpp:1181 configuring streams: (0) 640x480-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:38:36.997375885] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   still    (640, 480)   XBGR8888  0.0606
+[1:38:43.746960704] [1881]  INFO Camera camera.cpp:1181 configuring streams: (0) 640x480-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:38:43.749844674] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   video    (640, 480)   XBGR8888  0.0327
+[1:38:47.728507728] [1884]  INFO Camera camera.cpp:1181 configuring streams: (0) 640x480-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:38:47.730956703] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   preview  (640, 480)   XBGR8888  0.0367
+[1:38:52.089334766] [1887]  INFO Camera camera.cpp:1181 configuring streams: (0) 320x240-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:38:52.091783740] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   still    (320, 240)   XBGR8888  0.0476
+[1:38:57.477757989] [1890]  INFO Camera camera.cpp:1181 configuring streams: (0) 320x240-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:38:57.480320962] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   video    (320, 240)   XBGR8888  0.0297
+[1:39:01.154768255] [1893]  INFO Camera camera.cpp:1181 configuring streams: (0) 320x240-XBGR8888 (1) 640x480-SGBRG10_CSI2P
+[1:39:01.157658225] [1867]  INFO RPI vc4.cpp:608 Sensor: /base/soc/i2c0mux/i2c@1/ov5647@36 - Selected sensor format: 640x480-SGBRG10_1X10 - Selected unicam format: 640x480-pGAA
+(640, 480) 58.92   preview  (320, 240)   XBGR8888  0.0209
