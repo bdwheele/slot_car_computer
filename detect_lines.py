@@ -102,7 +102,7 @@ def main():
         cv2.line(src, (geometry['finish_point'], 0), (round(geometry['finish_point'] + (geometry['finish_slope'] * 480)), 480), (0,255,255))
 
         print(geometry)
-
+        print(get_lanedata(src, geometry))
 
         cv2.imwrite(args.outfile, src)
     else:
@@ -192,11 +192,25 @@ def get_geometry(bgrimage):
     # vertical line
     geometry['finish_point'] = round(min([x['x_intercept'] for x in lines if x['isVertical']]))
     geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
-
-
-
-
     return geometry
+
+
+def get_lanedata(image, geometry):
+    """Return arrays of pixels """
+    data = {}
+    for lane in ('lane1', 'lane2'):
+        ldata = []
+        intercept = geometry[lane + "_point"]
+        slope = geometry[lane + "_slope"]
+        for x in range(640):
+            y = round(intercept + (slope * x))
+            # numpy arrays are row, column
+            pxl = image[y, x]        
+            cval = pxl[0] + pxl[1] * 256 + pxl[2] * 65536
+            ldata.append(f"{cval:06X}")
+        data[lane] = ldata
+
+    return data
 
 
 if __name__ == "__main__":
