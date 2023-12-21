@@ -7,6 +7,7 @@ import time
 import argparse
 from math import *
 from statistics import *
+import logging
 
 def main():
     parser = argparse.ArgumentParser()
@@ -111,6 +112,20 @@ def main():
     print(f"Elapsed time: {time.time() - stime}")
 
 
+def decorate_with_geometry(src, geometry):
+    # find the lane dividing line
+    cv2.circle(src, (0, geometry['lane_divide']), radius=3, color=(0, 0, 255))
+    cv2.line(src, (0, geometry['lane_divide']), (640, geometry['lane_divide']), color=(255,255, 0))
+    # draw the two lanes...
+    cv2.line(src, (0, geometry['lane1_point']), (640, round(geometry['lane1_point'] + (geometry['lane1_slope'] * 640))), color=(255, 255, 0))
+    cv2.line(src, (0, geometry['lane2_point']), (640, round(geometry['lane2_point'] + (geometry['lane2_slope'] * 640))), color=(255, 255, 0))
+
+    # draw the finish line
+    cv2.line(src, (geometry['finish_point'], 0), (round(geometry['finish_point'] + (geometry['finish_slope'] * 480)), 480), (0,255,255))
+
+    
+
+
 def get_geometry(bgrimage):
     """Get track geometry from a BGR image or return None if it can't be determined"""
     g_image = cv2.cvtColor(bgrimage, cv2.COLOR_BGR2GRAY)
@@ -192,7 +207,18 @@ def get_geometry(bgrimage):
     # vertical line
     geometry['finish_point'] = round(min([x['x_intercept'] for x in lines if x['isVertical']]))
     geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
+    
+    geometry['finish_points'] = [(y, round(geometry['finish_point'] + (geometry['finish_slope'] * y))) for y in range(480)]
+    logging.info(f"Finish width: {geometry['finish_slope'] * 480}")
     return geometry
+
+def get_finishpoints(image, geometry):
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    data = []
+    for pt in geometry['finish_points']:
+        #pxl = image[pt[0], pt[1]]
+        data.append(image[pt[0], pt[1]])
+    return data
 
 
 def get_lanedata(image, geometry):
@@ -207,7 +233,8 @@ def get_lanedata(image, geometry):
             # numpy arrays are row, column
             pxl = image[y, x]        
             cval = pxl[0] + pxl[1] * 256 + pxl[2] * 65536
-            ldata.append(f"{cval:06X}")
+            #ldata.append(f"{cval:06X}")
+            ldata.append(cval)
         data[lane] = ldata
 
     return data
