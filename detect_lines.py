@@ -115,7 +115,7 @@ def main():
 def decorate_with_geometry(src, geometry):
     # find the lane dividing line
     cv2.circle(src, (0, geometry['lane_divide']), radius=3, color=(0, 0, 255))
-    cv2.line(src, (0, geometry['lane_divide']), (640, geometry['lane_divide']), color=(255,255, 0))
+    cv2.line(src, (0, geometry['lane_divide']), (640, geometry['lane_divide']), color=(255, 0, 255))
     # draw the two lanes...
     cv2.line(src, (0, geometry['lane1_point']), (640, round(geometry['lane1_point'] + (geometry['lane1_slope'] * 640))), color=(255, 255, 0))
     cv2.line(src, (0, geometry['lane2_point']), (640, round(geometry['lane2_point'] + (geometry['lane2_slope'] * 640))), color=(255, 255, 0))
@@ -204,12 +204,21 @@ def get_geometry(bgrimage):
     geometry['lane2_slope'] = median([x['slope'] for x in lines if x['isHorizontal'] and x['y_intercept'] > geometry['lane_divide']])
     
     # finish line.  Let's assume that traffic is left-to-right.  The finish line is the leftmost
-    # vertical line
-    geometry['finish_point'] = round(min([x['x_intercept'] for x in lines if x['isVertical']]))
+    # vertical line...but sometimes that's not a great line, so we're going to take the
+    # average of all of the vertical line X intercepts and the median slope.
+    geometry['finish_point'] = round(mean([x['x_intercept'] for x in lines if x['isVertical']]))
     geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
-    
     geometry['finish_points'] = [(y, round(geometry['finish_point'] + (geometry['finish_slope'] * y))) for y in range(480)]
     logging.info(f"Finish width: {geometry['finish_slope'] * 480}")
+    
+    # last thing -- we want to find the lane points for each line.  For each lane let's take the 
+    # 1/2 the distance between the lane and the track center line and then center it on the lane/finish
+    # intersection point.
+    lane_finish_width = (geometry['lane_divide'] - geometry['lane1_point']) / 2
+    logging.info(f"lane finish width: {lane_finish_width}")
+    
+    
+    
     return geometry
 
 def get_finishpoints(image, geometry):

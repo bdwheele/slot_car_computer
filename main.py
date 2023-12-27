@@ -93,8 +93,10 @@ def camera_thread():
 
         photo = picam.capture_array()        
         #ldata = get_lanedata(photo, geometry)
-        fpts = get_finishpoints(photo, geometry)        
-        logging.info(f"Photo! {time.time() - ltime}  ({np.subtract(lfpts, fpts)})")
+        fpts = get_finishpoints(photo, geometry)
+        raw = np.subtract(lfpts, fpts)
+        quant = np.right_shift(np.bitwise_and(raw, 0xf0), 4)
+        logging.info(f"Photo! {time.time() - ltime}  ({''.join(['0123456789ABCDEF'[x] for x in quant])})")
         if snapshot:
             cv2.imwrite(sys.path[0] + "/temp/snapshot.png", cv2.cvtColor(photo, cv2.COLOR_BGR2RGB))
             snapshot = False
@@ -121,11 +123,34 @@ class Webserver(http.server.BaseHTTPRequestHandler):
         if self.path == "/snapshot":
             logging.info("Taking snapshot")
             snapshot = True
+        if self.path == "/calibration":
+            self.send_response(200, "Calibration Image")
+            self.send_header("Content-type", "image/png")
+            self.end_headers()
+            with open(sys.path[0] + "/temp/calibration.png", "rb") as f:
+                self.wfile.write(f.read())
+            return
+        if self.path == "/last_snapshot":
+            self.send_response(200, "Calibration Image")
+            self.send_header("Content-type", "image/png")
+            self.end_headers()
+            with open(sys.path[0] + "/temp/snapshot.png", "rb") as f:
+                self.wfile.write(f.read())
+            return
 
         self.send_response(200, 'Hello world')
-        self.send_header("Content-type", "text/plain")
+        self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.wfile.write(b"Hello world!\n")
+        self.wfile.write(b"""<html>
+                         <head><title>Slot car computer</title></head>
+                         <body><h2>Slot car computer</h2>
+                         <ul>
+                         <li><a href="/recalibrate">Recalibrate</a></li>
+                         <li><a href="/calibration">Calibration Image</a></li>
+                         <li><a href="/snapshot">Take Snapshot</a></li>
+                         <li><a href="/last_snapshot">Last snapshot Image</a></li>
+                         </ul>
+                         </body></html>\n""")
         
 
     def do_HEAD(self):
