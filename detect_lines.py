@@ -112,47 +112,27 @@ def main():
     print(f"Elapsed time: {time.time() - stime}")
 
 
-def decorate_with_geometry(src, geometry):
-    # find the lane dividing line
-    cv2.circle(src, (0, geometry['lane_divide']), radius=3, color=(0, 0, 255))
-    cv2.line(src, (0, geometry['lane_divide']), (640, geometry['lane_divide']), color=(255, 0, 255))
-    # draw the two lanes...
-    cv2.line(src, (0, geometry['lane1_point']), (640, round(geometry['lane1_point'] + (geometry['lane1_slope'] * 640))), color=(255, 255, 0))
-    cv2.line(src, (0, geometry['lane2_point']), (640, round(geometry['lane2_point'] + (geometry['lane2_slope'] * 640))), color=(255, 255, 0))
-
-    # draw the finish line
-    cv2.line(src, (geometry['finish_point'], 0), (round(geometry['finish_point'] + (geometry['finish_slope'] * 480)), 480), (0,255,255))
-
-    # draw lane intersections
-    cv2.circle(src, geometry['lane1_intersection'], radius=5, color=(128, 128, 255), thickness=2)
-    cv2.circle(src, geometry['lane2_intersection'], radius=5, color=(128, 128, 255), thickness=2)
-
-    # draw lane points
-    for l in ('lane1', 'lane2'):
-        for p in geometry[f'{l}_points']:
-            cv2.circle(src, p, radius=1, color=(0, 255, 0))
-
 
 class Line:
     def __init__(self, x1, y1, x2, y2):
-        self.p1 = (x1, y1)
-        self.p2 = (x2, y2)
+        self.p1 = (round(x1), round(y1))
+        self.p2 = (round(x2), round(y2))
         self.slope = None
         self.angle = None
         self.y_intercept = None
         self.x_intercept = None
-        self.horizontal = y1 == y2
-        self.vertical = x1 == x2
+        self.horizontal = self.p1[1] == self.p2[1]
+        self.vertical = self.p1[0] == self.p1[0]
         self.points = None
 
         # compute all of the helpful things...
         if self.horizontal:
             self.angle = 0
-            self.y_intercept = y1
+            self.y_intercept = round(y1)
             self.slope = 0
         elif self.vertical:
             self.angle = 90
-            self.x_intercept = x1
+            self.x_intercept = round(x1)
             self.slope = 0  # this is really inverse slope.
         else:
             self.slope = ((y2 - y1) / (x2 - x1))
@@ -191,7 +171,7 @@ class Line:
         den = (x1 - x2) * (y3 - y4) - (y1 *- y2) * (x3 - x4)
         px = ((x1 * y2  - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den
         py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2)* (x3 * y4 - y3 * x4)) / den
-        return (round(px), round(py))
+        return (px, py)
 
 
     def points(self):
@@ -206,6 +186,9 @@ class Line:
                 self.points = [(self.p1[0] + x, self.p1[1] + x * self.slope) for x in range(abs(self.p1[0] - self.p2[0])) + 1]
             elif self.vertical:
                 self.points = [(self.p1[0] + y * self.slope, self.p1[1] + y) for y in range(abs(self.p1[1] - self.p2[1])) + 1]
+            # round all of the points.
+            self.points = [(round(p[0]), round(p[1])) for p in self.points]
+                
         return self.points
 
 
@@ -228,53 +211,62 @@ class TrackGeometry:
         # find the lane dividing line.  It should be the midpoint of the y-intercepts
         ymin = min([x.y_intercept for x in lines if x.horizontal])
         ymax = max([x.y_intercept for x in lines if x.horizontal])
-        mp = round((ymax + ymin) / 2)        
+        mp = (ymax + ymin) / 2
         self.lane_divide = Line(0, mp, width, mp)
 
         # compute each lane's mid line
         self.lanes = []
-        y1 = round(median([x.y_intercept for x in lines if x.horizontal and x.y_intercept < self.lane_divide.y_intercept]))
+        y1 = median([x.y_intercept for x in lines if x.horizontal and x.y_intercept < self.lane_divide.y_intercept])
         y2 = y1 + width * median([x.slope for x in lines if x.horizontal and x.y_intercept < self.lane_divide.y_intercept])
         self.lanes[0] = Line(0, y1, width, y2)
-        y1 = round(median([x.y_intercept for x in lines if x.horizontal and x.y_intercept > self.lane_divide.y_intercept]))
+        y1 = median([x.y_intercept for x in lines if x.horizontal and x.y_intercept > self.lane_divide.y_intercept])
         y2 = y1 + width * median([x.slope for x in lines if x.horizontal and x.y_intercept > self.lane_divide.y_intercept])
         self.lanes[1] = Line(0, y1, width, y2)
-
-
 
 
         # finish line.  Let's assume that traffic is left-to-right.  The finish line is the leftmost
         # vertical line...but sometimes that's not a great line, so we're going to take the
         # average of all of the vertical line X intercepts and the median slope.
-        geometry['finish_point'] = round(mean([x['x_intercept'] for x in lines if x['isVertical']]))
-        geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
-        geometry['finish_points'] = [(y, round(geometry['finish_point'] + (geometry['finish_slope'] * y))) for y in range(480)]
-        logging.info(f"Finish width: {geometry['finish_slope'] * 480}")
-        
-        # last thing -- we want to find the lane points for each line.  For each lane let's take the 
-        # 1/2 the distance between the lane and the track center line and then center it on the lane/finish
-        # intersection point.
-        lane_finish_width = (geometry['lane_divide'] - geometry['lane1_point']) / 2
-        logging.info(f"lane finish width: {lane_finish_width}")
-        
+        x1 = mean([x.x_intercept for x in lines if x.vertical])
+        x2 = x1 + height * median([x.slope for x in lines if x.vertical])
+        self.finish_line = Line(x1, 0, x2, height)
 
 
-        geometry['lane1_intersection'] = find_intersection(geometry['lane1_point'], geometry['lane1_slope'],
-                                            geometry['finish_point'], geometry['finish_slope'])
+        # we need to find the scanning area for each of the lanes.  Length-wise, it'll be half the
+        # width between the first lane line and the lane divider.
+        self.lane_scan = []
+        scan_width =  abs(self.lane_divide.y_intercept - self.lanes[0].y_intercept) / 2
 
-        geometry['lane2_intersection'] = find_intersection(geometry['lane2_point'], geometry['lane2_slope'],
-                                                        geometry['finish_point'], geometry['finish_slope'])
-        logging.info(f"Lane 1: {geometry['lane1_intersection']}, Lane 2: {geometry['lane2_intersection']}")
-        
-        # precompute the lane points
+        ipoint = self.finish_line.intersection(self.lanes[0], (width, height))
+        self.lane_scan[0] = Line(ipoint[0] - self.finish_line.slope * scan_width / 2, ipoint[1] - scan_width / 2,
+                                 ipoint[0] + self.finish_line.slope * scan_width / 2, ipoint[1] + scan_width / 2)
+
+        ipoint = self.finish_line.intersection(self.lanes[0], (width, height))
+        self.lane_scan[1] = Line(ipoint[0] - self.finish_line.slope * scan_width / 2, ipoint[1] - scan_width / 2,
+                                 ipoint[0] + self.finish_line.slope * scan_width / 2, ipoint[1] + scan_width / 2)
+
+
+    def decorate_image(self, src):
+
+        # find the lane dividing line
+        cv2.circle(src, (0, geometry['lane_divide']), radius=3, color=(0, 0, 255))
+        cv2.line(src, (0, geometry['lane_divide']), (640, geometry['lane_divide']), color=(255, 0, 255))
+        # draw the two lanes...
+        cv2.line(src, (0, geometry['lane1_point']), (640, round(geometry['lane1_point'] + (geometry['lane1_slope'] * 640))), color=(255, 255, 0))
+        cv2.line(src, (0, geometry['lane2_point']), (640, round(geometry['lane2_point'] + (geometry['lane2_slope'] * 640))), color=(255, 255, 0))
+
+        # draw the finish line
+        cv2.line(src, (geometry['finish_point'], 0), (round(geometry['finish_point'] + (geometry['finish_slope'] * 480)), 480), (0,255,255))
+
+        # draw lane intersections
+        cv2.circle(src, geometry['lane1_intersection'], radius=5, color=(128, 128, 255), thickness=2)
+        cv2.circle(src, geometry['lane2_intersection'], radius=5, color=(128, 128, 255), thickness=2)
+
+        # draw lane points
         for l in ('lane1', 'lane2'):
-            geometry[f'{l}_points'] = []
-            for o in range(lane_finish_width):
-                y = geometry[f"{l}_intersection"][1] - lane_finish_width / 2 + o
-                x = geometry[f'{l}_point'] + geometry[f'{l}_slope'] * y
-                geometry[f'{l}_points'].append((x, y))
-        
-        return geometry
+            for p in geometry[f'{l}_points']:
+                cv2.circle(src, p, radius=1, color=(0, 255, 0))
+
 
 def get_finishpoints(image, geometry):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
