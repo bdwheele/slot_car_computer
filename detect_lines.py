@@ -123,103 +123,158 @@ def decorate_with_geometry(src, geometry):
     # draw the finish line
     cv2.line(src, (geometry['finish_point'], 0), (round(geometry['finish_point'] + (geometry['finish_slope'] * 480)), 480), (0,255,255))
 
-    
+    # draw lane intersections
+    cv2.circle(src, geometry['lane1_intersection'], radius=5, color=(128, 128, 255), thickness=2)
+    cv2.circle(src, geometry['lane2_intersection'], radius=5, color=(128, 128, 255), thickness=2)
+
+    # draw lane points
+    for l in ('lane1', 'lane2'):
+        for p in geometry[f'{l}_points']:
+            cv2.circle(src, p, radius=1, color=(0, 255, 0))
 
 
-def get_geometry(bgrimage):
-    """Get track geometry from a BGR image or return None if it can't be determined"""
-    g_image = cv2.cvtColor(bgrimage, cv2.COLOR_BGR2GRAY)
-    # run Canny edge detection    
-    e_image = cv2.Canny(g_image, threshold1=50, threshold2=200, apertureSize=3)
-    # get the hough lines
-    hlines = cv2.HoughLinesP(e_image, rho=1, theta=pi / 180, threshold=50, minLineLength=70, maxLineGap=35)
-    if hlines is None:
-        # didn't detect any lines. 
-        return None
+class Line:
+    def __init__(self, x1, y1, x2, y2):
+        self.p1 = (x1, y1)
+        self.p2 = (x2, y2)
+        self.slope = None
+        self.angle = None
+        self.y_intercept = None
+        self.x_intercept = None
+        self.horizontal = y1 == y2
+        self.vertical = x1 == x2
+        self.points = None
 
-    # compute a bunch of data for each of the lines found.
-    lines = []
-    for hline in hlines:
-        x1, y1, x2, y2 = hline[0]
-        line = {
-            'p1': (x1, y1),
-            'p2': (x2, y2),
-            'isHorizontal': y1 == y2,
-            'isVertical': x1 == x2,
-            'slope': None,
-            'angle': None,
-            'x_intercept': None,
-            'y_intercept': None
-        }
-
-        # compute angle, slope, and intercept
-        if line['isHorizontal']:
-            line['angle'] = 0
-            line['y_intercept'] = y1
-            line['slope'] = 0
-        elif line['isVertical']:
-            line['angle'] = 90
-            line['x_intercept'] = x1
-            line['slope'] = 0  # this is really inverse slope.
+        # compute all of the helpful things...
+        if self.horizontal:
+            self.angle = 0
+            self.y_intercept = y1
+            self.slope = 0
+        elif self.vertical:
+            self.angle = 90
+            self.x_intercept = x1
+            self.slope = 0  # this is really inverse slope.
         else:
-            line['slope'] = ((y2 - y1) / (x2 - x1))
-            line['angle'] = abs(degrees(atan(line['slope'])))
+            self.slope = ((y2 - y1) / (x2 - x1))
+            self.angle = abs(degrees(atan(self.slope)))
             # find the y intercept
             # y = mx + b
             # l[1] = slope * l[0] + y_intercept
             # l[1] - y_intercept = slope * l[0]
             # -y_intercept = slope * l[0] - l[1]
             # y_intercept = -slope * l[0] + l[1]
-            y_int = -line['slope'] * x1 + y1
-            if line['angle'] < 5:
+            y_int = -self.slope * x1 + y1
+            if self.angle < 5:
                 # horizontal-ish line.  Use the y intercept.
-                line['isHorizontal'] = True
-                line['y_intercept'] = round(y_int)
-            elif abs(line['angle'] - 90) < 5:
+                self.horizontal = True
+                self.y_intercept = round(y_int)
+            elif abs(self.angle - 90) < 5:
                 # vertical-ish line.  Compute x-intercept
-                line['isVertical'] = True
+                self.vertical = True
                 # y = mx + b
                 # 0 = slope * x + y_int
                 # -y_int = slope * x
                 # -y_int / slope = x
-                line['x_intercept'] = round(-y_int / line['slope'])
-                line['slope'] = 1/line['slope']  # invert the slope
-        lines.append(line)
+                self.x_intercept = round(-y_int / self.slope)
+                self.slope = 1/self.slope  # invert the slope
+
+
+    def intersection(self, other, bounds=None):
+        """Return a tuple that's a coordinate for the intersection of this line
+           and other.  If they do not intersect (ever, or within the specified bounds), 
+           raise a ValueError"""
+        # per https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection        
+        x1, y1 = self.p1
+        x2, y2 = self.p2
+        x3, y3 = other.p1
+        x4, y4 = other.p2
+        den = (x1 - x2) * (y3 - y4) - (y1 *- y2) * (x3 - x4)
+        px = ((x1 * y2  - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den
+        py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2)* (x3 * y4 - y3 * x4)) / den
+        return (round(px), round(py))
+
+
+    def points(self):
+        """Return a list of point tuples for the line"""
+        if self.points is None:
+            self.points = []
+            if self.angle == 0:
+                self.points = [(x, self.p1[1]) for x in range(abs(self.p1[0] - self.p2[0]) + 1)]
+            elif self.angle == 90:
+                self.points = [(self.p1[1], y) for y in range(abs(self.p1[1] - self.p2[1]) + 1)]
+            elif self.horizontal:
+                self.points = [(self.p1[0] + x, self.p1[1] + x * self.slope) for x in range(abs(self.p1[0] - self.p2[0])) + 1]
+            elif self.vertical:
+                self.points = [(self.p1[0] + y * self.slope, self.p1[1] + y) for y in range(abs(self.p1[1] - self.p2[1])) + 1]
+        return self.points
+
+
+class TrackGeometry:
+    def __init__(self, bgrimage):
+        """Get track geometry from a BGR image or raise ValueError if it can't be determined"""    
+        width, height = bgrimage.size
+        gray_image = cv2.cvtColor(bgrimage, cv2.COLOR_BGR2GRAY)
+        # run Canny edge detection    
+        edge_image = cv2.Canny(gray_image, threshold1=50, threshold2=200, apertureSize=3)
+        # get the hough lines
+        houghlines = cv2.HoughLinesP(edge_image, rho=1, theta=pi / 180, threshold=50, minLineLength=70, maxLineGap=35)
+        if houghlines is None:
+            # didn't detect any lines. 
+            raise ValueError("Cannot detect track geometry")
+
+        # formalize all the discovered lines
+        lines = [Line(*x) for x in houghlines]
+
+        # find the lane dividing line.  It should be the midpoint of the y-intercepts
+        ymin = min([x.y_intercept for x in lines if x.horizontal])
+        ymax = max([x.y_intercept for x in lines if x.horizontal])
+        mp = round((ymax + ymin) / 2)        
+        self.lane_divide = Line(0, mp, width, mp)
+
+        # compute each lane's mid line
+        self.lanes = []
+        y1 = round(median([x.y_intercept for x in lines if x.horizontal and x.y_intercept < self.lane_divide.y_intercept]))
+        y2 = y1 + width * median([x.slope for x in lines if x.horizontal and x.y_intercept < self.lane_divide.y_intercept])
+        self.lanes[0] = Line(0, y1, width, y2)
+        y1 = round(median([x.y_intercept for x in lines if x.horizontal and x.y_intercept > self.lane_divide.y_intercept]))
+        y2 = y1 + width * median([x.slope for x in lines if x.horizontal and x.y_intercept > self.lane_divide.y_intercept])
+        self.lanes[1] = Line(0, y1, width, y2)
+
+
+
+
+        # finish line.  Let's assume that traffic is left-to-right.  The finish line is the leftmost
+        # vertical line...but sometimes that's not a great line, so we're going to take the
+        # average of all of the vertical line X intercepts and the median slope.
+        geometry['finish_point'] = round(mean([x['x_intercept'] for x in lines if x['isVertical']]))
+        geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
+        geometry['finish_points'] = [(y, round(geometry['finish_point'] + (geometry['finish_slope'] * y))) for y in range(480)]
+        logging.info(f"Finish width: {geometry['finish_slope'] * 480}")
         
-    # Now that the lines are identified, start laying out the track geometry.
-    geometry = {
-        'lines': lines,        
-    }
+        # last thing -- we want to find the lane points for each line.  For each lane let's take the 
+        # 1/2 the distance between the lane and the track center line and then center it on the lane/finish
+        # intersection point.
+        lane_finish_width = (geometry['lane_divide'] - geometry['lane1_point']) / 2
+        logging.info(f"lane finish width: {lane_finish_width}")
+        
 
-    # find the lane dividing line.  It should be the median of all of the 
-    # y-intercepts, offset by the 
-    ymin = min([x['y_intercept'] for x in lines if x['isHorizontal']])
-    ymax = max([x['y_intercept'] for x in lines if x['isHorizontal']])
-    geometry['lane_divide'] = round((ymax + ymin) / 2)
 
-    # get each lane's intercept and slope...
-    geometry['lane1_point'] = round(median([x['y_intercept'] for x in lines if x['isHorizontal'] and x['y_intercept'] < geometry['lane_divide']]))
-    geometry['lane1_slope'] = median([x['slope'] for x in lines if x['isHorizontal'] and x['y_intercept'] < geometry['lane_divide']])
-    geometry['lane2_point'] = round(median([x['y_intercept'] for x in lines if x['isHorizontal'] and x['y_intercept'] > geometry['lane_divide']]))
-    geometry['lane2_slope'] = median([x['slope'] for x in lines if x['isHorizontal'] and x['y_intercept'] > geometry['lane_divide']])
-    
-    # finish line.  Let's assume that traffic is left-to-right.  The finish line is the leftmost
-    # vertical line...but sometimes that's not a great line, so we're going to take the
-    # average of all of the vertical line X intercepts and the median slope.
-    geometry['finish_point'] = round(mean([x['x_intercept'] for x in lines if x['isVertical']]))
-    geometry['finish_slope'] = median([x['slope'] for x in lines if x['isVertical']])
-    geometry['finish_points'] = [(y, round(geometry['finish_point'] + (geometry['finish_slope'] * y))) for y in range(480)]
-    logging.info(f"Finish width: {geometry['finish_slope'] * 480}")
-    
-    # last thing -- we want to find the lane points for each line.  For each lane let's take the 
-    # 1/2 the distance between the lane and the track center line and then center it on the lane/finish
-    # intersection point.
-    lane_finish_width = (geometry['lane_divide'] - geometry['lane1_point']) / 2
-    logging.info(f"lane finish width: {lane_finish_width}")
-    
-    
-    
-    return geometry
+        geometry['lane1_intersection'] = find_intersection(geometry['lane1_point'], geometry['lane1_slope'],
+                                            geometry['finish_point'], geometry['finish_slope'])
+
+        geometry['lane2_intersection'] = find_intersection(geometry['lane2_point'], geometry['lane2_slope'],
+                                                        geometry['finish_point'], geometry['finish_slope'])
+        logging.info(f"Lane 1: {geometry['lane1_intersection']}, Lane 2: {geometry['lane2_intersection']}")
+        
+        # precompute the lane points
+        for l in ('lane1', 'lane2'):
+            geometry[f'{l}_points'] = []
+            for o in range(lane_finish_width):
+                y = geometry[f"{l}_intersection"][1] - lane_finish_width / 2 + o
+                x = geometry[f'{l}_point'] + geometry[f'{l}_slope'] * y
+                geometry[f'{l}_points'].append((x, y))
+        
+        return geometry
 
 def get_finishpoints(image, geometry):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
