@@ -8,7 +8,7 @@ import threading
 from enum import Enum
 import logging
 from picamera2 import Picamera2
-from detect_lines import get_geometry, get_lanedata, decorate_with_geometry, get_finishpoints
+from detect_lines import TrackGeometry, Line
 import cv2
 import sys
 import statistics
@@ -74,16 +74,22 @@ def camera_thread():
     geometry = None
     ltime = time.time()
     lfpts = [0]
+    last_lap = [0, 0]
     while True:
         if not calibrated:
             logging.info("Starting calibration...")
             photo = picam.capture_array()
-            geometry = get_geometry(photo)
+            #geometry = get_geometry(photo)
+            geometry = TrackGeometry(photo)
             if geometry is None:
                 logging.error("Cannot determine geometry, restarting calibration")
                 continue
-            lfpts = get_finishpoints(photo, geometry)
-            decorate_with_geometry(photo, geometry)
+            
+            #lfpts = get_finishpoints(photo, geometry)
+            lfpts = geometry.read_lanes(photo)
+            #logging.info(f"lfpts: {lfpts}")
+            #decorate_with_geometry(photo, geometry)
+            geometry.decorate_image(photo)
             cv2.imwrite(sys.path[0] + "/temp/calibration.png", cv2.cvtColor(photo, cv2.COLOR_BGR2RGB))
 
             
@@ -91,12 +97,23 @@ def camera_thread():
             logging.info("Calibration complete")
             calibrated = True
 
+        now = time.time()
         photo = picam.capture_array()        
-        #ldata = get_lanedata(photo, geometry)
-        fpts = get_finishpoints(photo, geometry)
+        fpts = geometry.read_lanes(photo)
+        #logging.info(f"fpts: {fpts}")
         raw = np.subtract(lfpts, fpts)
         quant = np.right_shift(np.bitwise_and(raw, 0xf0), 4)
-        logging.info(f"Photo! {time.time() - ltime}  ({''.join(['0123456789ABCDEF'[x] for x in quant])})")
+        means = [np.mean(x) for x in quant]
+        #logging.info(quant)
+        logging.info(f"Photo! {time.time() - ltime} ({means})")
+        #for i, l in enumerate(quant):
+        #    logging.info(f"Lane {i}: ({''.join(['0123456789ABCDEF'[x] for x in l])})")
+        for i, m in enumerate(means):
+            if m > 5 and time.time() - last_lap[i] > 10:
+                logging.info(f"Lane {i} has crossed line, lap time: {now - last_lap[i]}")
+                last_lap[i] = now
+        
+        
         if snapshot:
             cv2.imwrite(sys.path[0] + "/temp/snapshot.png", cv2.cvtColor(photo, cv2.COLOR_BGR2RGB))
             snapshot = False
