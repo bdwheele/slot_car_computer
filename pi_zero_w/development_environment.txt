@@ -1,0 +1,4 @@
+SSHFS mount the development environment on flexo from racetrack.local:
+
+sshfs flexo.local:projects/slot_car_computer slot_car_computer/
+

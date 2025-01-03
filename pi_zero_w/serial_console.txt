@@ -1,0 +1,13 @@
+Connect GND/TX/RX per the instructions here:
+
+https://learn.adafruit.com/raspberry-pi-zero-creation/give-it-life
+
+Don't use 5V -- we're going to power it from the USB port.
+
+Use miniterm (via `pip install pyserial`)
+
+python -m serial.tools.miniterm /dev/ttyUSB0
+
+
+Set the filter on miniterm to 'direct' which will pass all control codes to the terminal.
+
